@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B24 PIPELINE MONITOR</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep:    #070a0f;
+    --bg-panel:   #0c1118;
+    --bg-card:    #111820;
+    --bg-hover:   #161f2a;
+    --border:     #1e2d3d;
+    --border-dim: #152030;
+    --accent:     #00d4ff;
+    --accent-dim: rgba(0,212,255,0.12);
+    --accent-glow:rgba(0,212,255,0.4);
+    --accent-brd: rgba(0,212,255,0.25);
+    --green:      #00ff88;
+    --green-dim:  rgba(0,255,136,0.18);
+    --green-brd:  rgba(0,255,136,0.35);
+    --yellow:     #ffd600;
+    --yellow-dim: rgba(255,214,0,0.18);
+    --yellow-brd: rgba(255,214,0,0.35);
+    --red:        #ff3b5c;
+    --red-dim:    rgba(255,59,92,0.18);
+    --red-brd:    rgba(255,59,92,0.40);
+    --neutral:    #8ba3b8;
+    --text-main:  #d4e4f0;
+    --text-dim:   #5a7a94;
+    --text-faint: #2a4a5e;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-ui:      'Rajdhani', sans-serif;
+    --font-mono:    'JetBrains Mono', monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg-deep);
+    color: var(--text-main);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content:''; position:fixed; inset:0; z-index:0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size:40px 40px; pointer-events:none;
+  }
+  body::after {
+    content:''; position:fixed; inset:0; z-index:0;
+    background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);
+    pointer-events:none;
+  }
+  .wrapper { position:relative; z-index:1; max-width:1680px; margin:0 auto; padding:16px 20px 30px; }
+
+  /* HEADER */
+  header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px; background:var(--bg-panel);
+    border:1px solid var(--border); border-top:2px solid var(--accent);
+    margin-bottom:16px; position:relative; gap:18px; flex-wrap:wrap;
+  }
+  header::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:linear-gradient(to bottom,var(--accent),transparent); }
+  .header-left { display:flex; align-items:center; gap:18px; }
+  .header-logo { font-family:var(--font-display); font-size:28px; letter-spacing:4px; color:var(--accent); text-shadow:0 0 20px var(--accent-glow); }
+  .header-divider { width:1px; height:36px; background:var(--border); }
+  .header-tag { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:2px; text-transform:uppercase; }
+
+  .header-right { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+
+  .filter-chips { display:flex; gap:0; border:1px solid var(--border); }
+  .chip {
+    font-family:var(--font-mono); font-size:10px; letter-spacing:2px;
+    padding:7px 14px; background:transparent; color:var(--text-dim);
+    border:none; cursor:pointer; transition:all .15s;
+    border-right:1px solid var(--border);
+  }
+  .chip:last-child { border-right:none; }
+  .chip:hover { color:var(--accent); background:var(--accent-dim); }
+  .chip.active { color:var(--accent); background:var(--accent-dim); box-shadow:inset 0 -2px 0 var(--accent); }
+
+  .last-refresh {
+    font-family:var(--font-mono); font-size:10px; letter-spacing:1px;
+    color:var(--text-dim);
+  }
+  .last-refresh .live-dot {
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--green); margin-right:6px;
+    animation:blink 1.4s ease-in-out infinite; box-shadow:0 0 8px var(--green);
+  }
+  .last-refresh.error .live-dot { background:var(--red); box-shadow:0 0 8px var(--red); animation:none; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .refresh-btn {
+    font-family:var(--font-mono); font-size:10px; letter-spacing:2px;
+    padding:6px 14px; background:transparent; color:var(--text-dim);
+    border:1px solid var(--border); cursor:pointer; transition:all .15s;
+  }
+  .refresh-btn:hover { color:var(--accent); border-color:var(--accent); }
+  .refresh-btn.spinning { color:var(--accent); border-color:var(--accent); animation:pulseBorder .6s ease; }
+  @keyframes pulseBorder { 0%{box-shadow:0 0 0 var(--accent-glow)} 50%{box-shadow:0 0 12px var(--accent-glow)} 100%{box-shadow:0 0 0 var(--accent-glow)} }
+
+  /* ERROR BANNER */
+  .error-banner {
+    display:none; padding:10px 16px; background:var(--red-dim);
+    border:1px solid var(--red-brd); color:var(--red);
+    font-family:var(--font-mono); font-size:11px; letter-spacing:1px;
+    margin-bottom:16px;
+  }
+  .error-banner.visible { display:block; }
+
+  /* KPI BAND */
+  .kpi-band {
+    display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px;
+  }
+  .kpi-tile {
+    background:var(--bg-panel); border:1px solid var(--border);
+    border-top:2px solid var(--accent);
+    padding:14px 16px; position:relative;
+  }
+  .kpi-label { font-family:var(--font-mono); font-size:9px; letter-spacing:2.5px; color:var(--text-dim); text-transform:uppercase; margin-bottom:8px; }
+  .kpi-value { font-family:var(--font-display); font-size:28px; letter-spacing:2px; color:var(--text-main); line-height:1; }
+  .kpi-sub   { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); margin-top:6px; letter-spacing:1px; }
+  .kpi-tile.success { border-top-color:var(--green); }
+  .kpi-tile.success .kpi-value { color:var(--green); }
+  .kpi-tile.warn    { border-top-color:var(--yellow); }
+  .kpi-tile.warn    .kpi-value { color:var(--yellow); }
+  .kpi-tile.fail    { border-top-color:var(--red); }
+  .kpi-tile.fail    .kpi-value { color:var(--red); }
+
+  /* TIMELINE */
+  .timeline { display:flex; flex-direction:column; gap:10px; }
+  .run-card {
+    background:var(--bg-panel); border:1px solid var(--border);
+    transition:border-color .2s, box-shadow .2s;
+  }
+  .run-card:hover { border-color:var(--accent-brd); box-shadow:0 0 24px var(--accent-glow); }
+  .run-card[open] { border-left:2px solid var(--accent); }
+
+  .run-summary {
+    list-style:none; cursor:pointer; padding:12px 16px;
+    display:grid; grid-template-columns:110px 88px 1fr 150px 96px; gap:18px;
+    align-items:center;
+  }
+  .run-summary::-webkit-details-marker { display:none; }
+  .run-summary:hover { background:var(--bg-hover); }
+
+  .run-date {
+    font-family:var(--font-display); font-size:18px; letter-spacing:2px; color:var(--text-main);
+  }
+  .run-name {
+    font-family:var(--font-mono); font-size:10px; letter-spacing:2.5px;
+    padding:3px 6px; border:1px solid var(--accent-brd);
+    background:var(--accent-dim); color:var(--accent);
+    text-transform:uppercase; text-align:center;
+    width:100%; box-sizing:border-box;
+  }
+  .run-name.adorni { border-color:var(--yellow-brd); background:var(--yellow-dim); color:var(--yellow); }
+  .run-name.unknown { border-color:var(--border); background:transparent; color:var(--text-dim); }
+
+  .run-bars { display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .client-row {
+    display:grid; grid-template-columns:22px repeat(13, 1fr); gap:2px;
+    align-items:center;
+  }
+  .client-row.empty { opacity:0.35; }
+  .client-letter {
+    font-family:var(--font-display); font-size:11px; letter-spacing:1px;
+    color:var(--accent); text-align:center;
+    border:1px solid var(--border); background:var(--bg-card);
+    height:14px; line-height:12px;
+  }
+  .client-row.empty .client-letter { color:var(--text-faint); border-style:dotted; }
+  .step-cell {
+    height:14px; background:var(--text-faint);
+    transition:transform .12s;
+  }
+  .step-cell:hover { transform:scaleY(1.4); }
+  .step-cell.success { background:var(--green); box-shadow:0 0 4px var(--green-dim); }
+  .step-cell.failed  { background:var(--red); box-shadow:inset 0 0 0 1px var(--red-brd); }
+  .step-cell.timeout { background:var(--yellow); box-shadow:0 0 4px var(--yellow-dim); }
+  .step-cell.skipped { background:var(--text-faint); }
+  .step-cell.missing { background:transparent; border:1px dotted var(--border-dim); }
+  .step-cell.pending { background:var(--bg-card); border:1px dashed var(--border); }
+  .step-cell.running { animation:pulseCyan 1.2s ease-in-out infinite; }
+  @keyframes pulseCyan {
+    0%,100% { background:var(--accent-dim); }
+    50%     { background:var(--accent); box-shadow:0 0 8px var(--accent-glow); }
+  }
+
+  .run-stats {
+    font-family:var(--font-mono); font-size:11px; letter-spacing:1px;
+    display:flex; gap:10px; align-items:center; justify-content:flex-end;
+  }
+  .stat-pill { display:inline-flex; align-items:center; gap:4px; }
+  .stat-pill.ok   { color:var(--green); }
+  .stat-pill.fail { color:var(--red); }
+  .stat-pill.tmo  { color:var(--yellow); }
+  .stat-pill.skp  { color:var(--text-dim); }
+  .stat-pill.run  { color:var(--accent); }
+
+  .run-duration {
+    font-family:var(--font-mono); font-size:11px; color:var(--text-dim);
+    text-align:right;
+  }
+
+  /* EXPANDED DETAIL */
+  .run-detail {
+    border-top:1px solid var(--border-dim);
+    padding:12px 16px 16px;
+    background:var(--bg-card);
+  }
+  .detail-client { margin-top:14px; }
+  .detail-client:first-child { margin-top:0; }
+  .detail-client-header {
+    font-family:var(--font-mono); font-size:10px; letter-spacing:2px;
+    color:var(--text-dim); text-transform:uppercase;
+    padding-bottom:6px; border-bottom:1px solid var(--border-dim);
+    margin-bottom:8px;
+    display:flex; gap:10px; align-items:baseline;
+  }
+  .detail-client-header .ck {
+    font-family:var(--font-display); font-size:14px; letter-spacing:2px;
+    color:var(--accent);
+  }
+  .detail-client-header .client-name {
+    font-family:var(--font-display); font-size:13px; letter-spacing:1.5px;
+    color:var(--text-main); text-transform:uppercase;
+  }
+  .step-table {
+    width:100%; border-collapse:collapse;
+    font-family:var(--font-mono); font-size:11px;
+  }
+  .step-table th, .step-table td {
+    text-align:left; padding:5px 8px;
+    border-bottom:1px solid var(--border-dim);
+  }
+  .step-table th {
+    font-size:9px; letter-spacing:1.5px; color:var(--text-dim);
+    text-transform:uppercase; font-weight:600;
+  }
+  .step-table td.dur { color:var(--text-dim); white-space:nowrap; }
+  .step-table td.step-desc { color:var(--text-main); font-family:var(--font-ui); font-size:12px; max-width:340px; }
+  .badge {
+    display:inline-block; padding:2px 8px; font-size:9px; letter-spacing:1.5px;
+    text-transform:uppercase; border:1px solid;
+  }
+  .badge.success { color:var(--green); border-color:var(--green-brd); background:var(--green-dim); }
+  .badge.failed  { color:var(--red); border-color:var(--red-brd); background:var(--red-dim); }
+  .badge.timeout { color:var(--yellow); border-color:var(--yellow-brd); background:var(--yellow-dim); }
+  .badge.skipped { color:var(--text-dim); border-color:var(--border); }
+  .badge.missing { color:var(--text-faint); border-color:var(--border-dim); border-style:dotted; }
+  .badge.running { color:var(--accent); border-color:var(--accent-brd); background:var(--accent-dim); }
+  .badge.pending { color:var(--text-dim); border-color:var(--border); border-style:dashed; }
+  .error-tail {
+    margin-top:6px; padding:8px 10px;
+    background:#0b0f15; border-left:3px solid var(--red);
+    color:#ffb1bd; font-family:var(--font-mono); font-size:10.5px;
+    max-height:200px; overflow:auto; white-space:pre-wrap;
+  }
+
+  .empty-state {
+    padding:40px 20px; text-align:center;
+    color:var(--text-dim); font-family:var(--font-mono); letter-spacing:2px;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-track { background:var(--bg-deep); }
+  ::-webkit-scrollbar-thumb { background:var(--border); }
+  ::-webkit-scrollbar-thumb:hover { background:var(--accent); }
+
+  @media (max-width: 900px) {
+    .kpi-band { grid-template-columns:repeat(2,1fr); }
+    .run-summary { grid-template-columns:1fr; gap:10px; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <header>
+      <div class="header-left">
+        <div class="header-logo">B24 PIPELINE MONITOR</div>
+        <div class="header-divider"></div>
+        <div class="header-tag" id="window-label">last 30 days</div>
+      </div>
+      <div class="header-right">
+        <div class="filter-chips" id="filter-chips">
+          <button class="chip active" data-name="all">ALL</button>
+          <button class="chip" data-name="main">MAIN</button>
+          <button class="chip" data-name="adorni">ADORNI</button>
+        </div>
+        <div class="last-refresh" id="last-refresh">
+          <span class="live-dot"></span><span id="last-refresh-text">connecting…</span>
+        </div>
+        <button class="refresh-btn" id="refresh-btn">REFRESH</button>
+      </div>
+    </header>
+
+    <div class="error-banner" id="error-banner"></div>
+
+    <div class="kpi-band">
+      <div class="kpi-tile" id="kpi-last">
+        <div class="kpi-label">LAST RUN</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-sub">—</div>
+      </div>
+      <div class="kpi-tile" id="kpi-success">
+        <div class="kpi-label">SUCCESS RATE 7D</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-sub">—</div>
+      </div>
+      <div class="kpi-tile" id="kpi-duration">
+        <div class="kpi-label">AVG DURATION 7D</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-sub">—</div>
+      </div>
+      <div class="kpi-tile" id="kpi-next">
+        <div class="kpi-label">NEXT SCHEDULED</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-sub">main 02:00 · adorni 04:00 (AR)</div>
+      </div>
+    </div>
+
+    <div class="timeline" id="timeline"></div>
+  </div>
+
+<script src="config.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  const API_BASE = (window.B24_API_BASE || "").replace(/\/+$/,"");
+  const POLL_MS  = window.B24_POLL_MS || 60000;
+  const STATE = {
+    nameFilter: "all",
+    days: 30,
+    payload: null,
+    timer: null,
+    nextSchedTimer: null,
+  };
+
+  // ── Status semantics ────────────────────────────────────────────────────
+  const STATUS_LABEL = {
+    success:"OK", failed:"FAIL", timeout:"TIMEOUT", skipped:"SKIP",
+    running:"RUNNING", pending:"PENDING", missing:"—",
+  };
+
+  const CLIENT_NAMES = {
+    P: "Santiago Passaglia",
+    M: "Jorge Macri",
+    L: "Horacio Rodríguez Larreta",
+    A: "Manuel Adorni",
+  };
+
+  const STEP_DESC = {
+    download:      "descarga Excel diario de Brand24 (Playwright)",
+    api_ingesta:   "ingesta agregados (mentions/sentiment/reach) via API Brand24",
+    excel_ingesta: "parsea el Excel y carga menciones a DB",
+    social_urls:   "completa URL+title+content de menciones FB/IG (GraphQL)",
+    twitter_urls:  "completa URL+texto de menciones X/Twitter",
+    scraper:       "scraping del texto completo de artículos (web/news)",
+    nlp_pass1:     "extrae términos NLP con OpenAI (1ª pasada, pre-scraping)",
+    engagement:    "tracking de likes/comments/shares en redes (48hs)",
+    influencers:   "top fuentes/influencers del período (GraphQL)",
+    sentiment:     "clasifica sentimiento custom verde/amarillo/rojo (OpenAI)",
+    briefing:      "genera briefing IA: resumen + insights + tendencias",
+    narrativa:     "detecta narrativas dominantes y bursts del período",
+    nlp_pass2:     "re-extrae términos NLP sobre texto scrapeado (2ª pasada)",
+  };
+
+  // ── DOM refs ────────────────────────────────────────────────────────────
+  const $timeline      = document.getElementById("timeline");
+  const $errorBanner   = document.getElementById("error-banner");
+  const $lastRefresh   = document.getElementById("last-refresh");
+  const $lastRefreshTx = document.getElementById("last-refresh-text");
+  const $refreshBtn    = document.getElementById("refresh-btn");
+  const $chips         = document.querySelectorAll("#filter-chips .chip");
+
+  // ── Format helpers ──────────────────────────────────────────────────────
+  function fmtDuration(secs) {
+    if (secs == null) return "—";
+    secs = Math.round(secs);
+    if (secs < 60) return secs + "s";
+    const m = Math.floor(secs/60), s = secs % 60;
+    if (m < 60) return m + "m " + (s ? s + "s" : "");
+    const h = Math.floor(m/60), mm = m % 60;
+    return h + "h " + (mm ? mm + "m" : "");
+  }
+  function fmtTime(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleTimeString("es-AR", {hour:"2-digit", minute:"2-digit", hour12:false});
+  }
+  function fmtRelative(iso) {
+    if (!iso) return "—";
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 60) return Math.round(diff) + "s ago";
+    if (diff < 3600) return Math.round(diff/60) + "m ago";
+    if (diff < 86400) return Math.round(diff/3600) + "h ago";
+    return Math.round(diff/86400) + "d ago";
+  }
+  function fmtDateLabel(isoDate) {
+    if (!isoDate) return "";
+    const [y,m,d] = isoDate.split("-");
+    return d + "/" + m + "/" + y;
+  }
+
+  // ── Render KPI band ─────────────────────────────────────────────────────
+  function renderKPIs(payload) {
+    const runs = payload.runs || [];
+    const last = runs[0] || null;
+
+    // Last run
+    {
+      const tile = document.getElementById("kpi-last");
+      tile.classList.remove("success","warn","fail");
+      const v = tile.querySelector(".kpi-value");
+      const s = tile.querySelector(".kpi-sub");
+      if (!last) {
+        v.textContent = "—"; s.textContent = "no runs yet";
+      } else {
+        const totals = last.totals || {};
+        const failed = (totals.fail||0) + (totals.timeout||0);
+        if ((totals.running||0) > 0) {
+          v.textContent = "RUNNING"; tile.classList.add("warn");
+        } else if (failed > 0) {
+          v.textContent = "FAILED"; tile.classList.add("fail");
+        } else {
+          v.textContent = "OK"; tile.classList.add("success");
+        }
+        s.textContent = (last.pipeline_name||"").toUpperCase() + " · " + fmtRelative(last.started_at) + " · " + fmtDuration(last.total_duration_secs);
+      }
+    }
+
+    // Success rate 7d
+    {
+      const tile = document.getElementById("kpi-success");
+      tile.classList.remove("success","warn","fail");
+      const v = tile.querySelector(".kpi-value");
+      const s = tile.querySelector(".kpi-sub");
+      const cutoff = Date.now() - 7*86400000;
+      const recent = runs.filter(r => r.started_at && new Date(r.started_at).getTime() >= cutoff);
+      if (recent.length === 0) {
+        v.textContent = "—"; s.textContent = "no runs in 7d";
+      } else {
+        let okSteps = 0, totalSteps = 0;
+        recent.forEach(r => {
+          const t = r.totals || {};
+          okSteps += (t.ok||0);
+          totalSteps += (t.ok||0) + (t.fail||0) + (t.timeout||0);
+        });
+        const pct = totalSteps === 0 ? 0 : Math.round(100*okSteps/totalSteps);
+        v.textContent = pct + "%";
+        s.textContent = recent.length + " runs · " + okSteps + "/" + totalSteps + " steps";
+        if (pct >= 95) tile.classList.add("success");
+        else if (pct >= 80) tile.classList.add("warn");
+        else tile.classList.add("fail");
+      }
+    }
+
+    // Avg duration 7d
+    {
+      const tile = document.getElementById("kpi-duration");
+      const v = tile.querySelector(".kpi-value");
+      const s = tile.querySelector(".kpi-sub");
+      const cutoff = Date.now() - 7*86400000;
+      const recent = runs.filter(r => r.started_at && new Date(r.started_at).getTime() >= cutoff && r.total_duration_secs);
+      if (recent.length === 0) {
+        v.textContent = "—"; s.textContent = "—";
+      } else {
+        const avg = recent.reduce((a,r) => a + (r.total_duration_secs||0), 0) / recent.length;
+        v.textContent = fmtDuration(avg);
+        s.textContent = "avg of " + recent.length + " runs";
+      }
+    }
+
+    // Next scheduled (also updated by timer)
+    updateNextScheduled();
+  }
+
+  function updateNextScheduled() {
+    const tile = document.getElementById("kpi-next");
+    const v = tile.querySelector(".kpi-value");
+    const now = new Date();
+    // Argentina = UTC-3, sin DST.
+    const utcH = now.getUTCHours();
+    const utcM = now.getUTCMinutes();
+    const arMinutes = ((utcH - 3 + 24) * 60 + utcM) % (24*60);
+    const targets = [2*60, 4*60]; // 02:00 main, 04:00 adorni
+    let nextTarget = targets.find(t => t > arMinutes);
+    let nextLabel;
+    if (nextTarget == null) { nextTarget = targets[0] + 24*60; nextLabel = "main 02:00"; }
+    else nextLabel = nextTarget === 2*60 ? "main 02:00" : "adorni 04:00";
+    const diffMin = nextTarget - arMinutes;
+    const h = Math.floor(diffMin/60), m = diffMin % 60;
+    v.textContent = (h ? h + "h " : "") + m + "m";
+    tile.querySelector(".kpi-sub").textContent = nextLabel + " · main 02:00 · adorni 04:00 (AR)";
+  }
+
+  // ── Render timeline ─────────────────────────────────────────────────────
+  function renderTimeline(payload) {
+    const runs = payload.runs || [];
+    const stepOrder = payload.step_order || [];
+    const clientOrder = payload.client_order || ["P","M","L","A"];
+
+    if (runs.length === 0) {
+      $timeline.innerHTML = '<div class="empty-state">NO RUNS IN WINDOW</div>';
+      return;
+    }
+
+    const html = runs.map(run => {
+      const totals = run.totals || {};
+      const clientByKey = {};
+      (run.clients || []).forEach(c => clientByKey[c.key] = c);
+
+      // Build 4 client rows in fixed P/M/L/A order
+      const rowsHtml = clientOrder.map(ck => {
+        const c = clientByKey[ck];
+        if (!c) {
+          // Empty client (this run didn't include it)
+          const cells = stepOrder.map(()=> '<div class="step-cell missing" title="not in this run"></div>').join("");
+          return `<div class="client-row empty"><div class="client-letter">${ck}</div>${cells}</div>`;
+        }
+        const cellsByStep = {};
+        (c.steps||[]).forEach(s => cellsByStep[s.step_id] = s);
+        const cells = stepOrder.map(sid => {
+          const s = cellsByStep[sid] || {status:"missing"};
+          const lbl = STATUS_LABEL[s.status] || s.status;
+          const dur = s.duration_secs ? fmtDuration(s.duration_secs) : "—";
+          const tip = `${sid} · ${lbl}${s.duration_secs ? " · "+dur : ""}${s.attempt && s.attempt>1 ? " · attempt "+s.attempt : ""}`;
+          return `<div class="step-cell ${s.status}" title="${tip}"></div>`;
+        }).join("");
+        return `<div class="client-row"><div class="client-letter" title="project ${c.project_id||"?"}">${ck}</div>${cells}</div>`;
+      }).join("");
+
+      // Stats pills
+      const statsHtml = [
+        totals.ok     ? `<span class="stat-pill ok">✓${totals.ok}</span>` : "",
+        totals.fail   ? `<span class="stat-pill fail">✗${totals.fail}</span>` : "",
+        totals.timeout? `<span class="stat-pill tmo">⧖${totals.timeout}</span>` : "",
+        totals.skipped? `<span class="stat-pill skp">·${totals.skipped}</span>` : "",
+        totals.running? `<span class="stat-pill run">▸${totals.running}</span>` : "",
+      ].filter(Boolean).join("");
+
+      const timeWindow = (run.started_at && run.finished_at)
+        ? `${fmtTime(run.started_at)} → ${fmtTime(run.finished_at)}`
+        : (run.started_at ? `${fmtTime(run.started_at)} →` : "—");
+
+      const detailHtml = (run.clients || []).map(c => {
+        const rowsTbl = (c.steps||[]).map(s => {
+          const dur = s.duration_secs != null ? fmtDuration(s.duration_secs) : "—";
+          const lbl = STATUS_LABEL[s.status] || s.status;
+          const att = s.attempt && s.attempt > 1 ? ` (×${s.attempt})` : "";
+          const errTail = s.error_tail
+            ? `<tr><td colspan="5"><pre class="error-tail">${escapeHtml(s.error_tail)}</pre></td></tr>`
+            : "";
+          const desc = STEP_DESC[s.step_id] || "";
+          return `<tr>
+            <td>${s.step_id}</td>
+            <td class="step-desc">${desc}</td>
+            <td><span class="badge ${s.status}">${lbl}</span>${att}</td>
+            <td class="dur">${dur}</td>
+            <td class="dur">${s.exit_code != null ? "exit "+s.exit_code : ""}</td>
+          </tr>${errTail}`;
+        }).join("");
+        const clientName = CLIENT_NAMES[c.key] || "";
+        const pidLbl = c.project_id ? `project ${c.project_id}` : "";
+        return `<div class="detail-client">
+          <div class="detail-client-header">
+            <span class="ck">${c.key}</span>
+            ${clientName ? `<span class="client-name">${clientName}</span>` : ""}
+            <span>${pidLbl}</span>
+          </div>
+          <table class="step-table">
+            <thead><tr><th>STEP</th><th>WHAT</th><th>STATUS</th><th>DURATION</th><th>EXIT</th></tr></thead>
+            <tbody>${rowsTbl}</tbody>
+          </table>
+        </div>`;
+      }).join("");
+
+      const nameClass = run.pipeline_name === "adorni" ? "adorni"
+                      : run.pipeline_name === "unknown" ? "unknown" : "";
+
+      return `<details class="run-card">
+        <summary class="run-summary">
+          <div class="run-date">${fmtDateLabel(run.run_date)}</div>
+          <div class="run-name ${nameClass}">${run.pipeline_name || "—"}</div>
+          <div class="run-bars">${rowsHtml}</div>
+          <div class="run-stats">${statsHtml || '<span class="stat-pill skp">no data</span>'}</div>
+          <div class="run-duration">${timeWindow}<br><span style="color:var(--text-faint)">${fmtDuration(run.total_duration_secs)}</span></div>
+        </summary>
+        <div class="run-detail">${detailHtml || '<div class="empty-state">no client data</div>'}</div>
+      </details>`;
+    }).join("");
+
+    $timeline.innerHTML = html;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  // ── Fetch loop ──────────────────────────────────────────────────────────
+  async function fetchStatus() {
+    const url = `${API_BASE}/api/v1/pipeline-status?days=${STATE.days}&name=${STATE.nameFilter}`;
+    try {
+      $refreshBtn.classList.add("spinning");
+      const resp = await fetch(url, {cache:"no-store"});
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const data = await resp.json();
+      STATE.payload = data;
+      $errorBanner.classList.remove("visible");
+      $lastRefresh.classList.remove("error");
+      $lastRefreshTx.textContent = "live · updated " + new Date().toLocaleTimeString("es-AR",{hour12:false});
+      renderKPIs(data);
+      renderTimeline(data);
+    } catch (err) {
+      $errorBanner.classList.add("visible");
+      $errorBanner.textContent = "ENDPOINT UNREACHABLE · " + err.message + " · last successful pull: " + ($lastRefreshTx.textContent || "never");
+      $lastRefresh.classList.add("error");
+    } finally {
+      setTimeout(() => $refreshBtn.classList.remove("spinning"), 400);
+    }
+  }
+
+  function startPolling() {
+    if (STATE.timer) clearInterval(STATE.timer);
+    STATE.timer = setInterval(() => {
+      if (!document.hidden) fetchStatus();
+    }, POLL_MS);
+  }
+
+  // ── Wire chips & buttons ────────────────────────────────────────────────
+  $chips.forEach(c => {
+    c.addEventListener("click", () => {
+      $chips.forEach(x => x.classList.remove("active"));
+      c.classList.add("active");
+      STATE.nameFilter = c.dataset.name;
+      fetchStatus();
+    });
+  });
+
+  $refreshBtn.addEventListener("click", fetchStatus);
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) fetchStatus();
+  });
+
+  // ── Bootstrap ───────────────────────────────────────────────────────────
+  if (!API_BASE) {
+    $errorBanner.classList.add("visible");
+    $errorBanner.textContent = "config.js missing window.B24_API_BASE — set it to your Cloudflared tunnel URL.";
+  } else {
+    fetchStatus();
+    startPolling();
+    setInterval(updateNextScheduled, 30000);
+  }
+})();
+</script>
+</body>
+</html>
